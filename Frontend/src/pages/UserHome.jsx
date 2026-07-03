@@ -1,286 +1,392 @@
-import React, { useEffect, useState, useRef } from 'react';
-import axios from 'axios';
-import { Link } from 'react-router-dom';
-import CartPanel from '../components/CartPanel';
-import ConfirmOrder from '../components/ConfirmOrder';
+import React, { useCallback, useEffect } from "react";
+
+import { useState, useRef } from "react";
+import axios from "axios";
+import { Link } from "react-router-dom";
+
+import CartPanel from "../components/CartPanel";
+import ConfirmOrder from "../components/ConfirmOrder";
+import LocationSearchPanel from "../components/LocationSearchPanel";
 
 const UserHome = () => {
-  const [admins, setAdmins] = useState([]);
+  const token = localStorage.getItem("token");
+
+  const [isAISearch, setIsAISearch] = useState(false);
+
+  const [menuItems, setMenuItems] = useState([]);
+
+  const [searchQuery, setSearchQuery] = useState("");
+
   const [cartItems, setCartItems] = useState([]);
-  const [cartPanelOpen, setCartPanelOpen] = useState(false);
+
   const [cartCount, setCartCount] = useState(0);
+
+  const [cartPanelOpen, setCartPanelOpen] = useState(false);
+
   const [confirmOrderPanel, setConfirmOrderPanel] = useState(false);
-  const [acceptedOrderPanel, setAcceptedOrderPanel] = useState(false);
-  const [selectedLocation, setSelectedLocation] = useState(null);
-  const [cartHotelId, setCartHotelId] = useState(null);
-  const [warning, setWarning] = useState('');
+
+  const [locationPanelOpen, setLocationPanelOpen] = useState(false);
+
+  const [selectedLocation, setSelectedLocation] = useState("");
+
+  const [cartRestaurantId, setCartRestaurantId] = useState(null);
+
+  const [warning, setWarning] = useState("");
+
+  const [search, setSearch] = useState("");
+
+  
+  const [category, setCategory] = useState(0);
 
   const cartPanelRef = useRef(null);
 
- useEffect(() => {
-  const fetchAdmins = async () => {
+const filteredMenuItems = isAISearch
+  ? menuItems
+  : menuItems.filter((item) => {
+      const matchesSearch = item.name
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase());
+
+      const matchesCategory =
+        category === 0 || item.category_id === category;
+
+      return matchesSearch && matchesCategory;
+    });
+
+  const fetchMenu = useCallback(async () => {
     try {
-      const response = await axios.get(
-        `${import.meta.env.VITE_BASE_URL}/admins/all`
+      const res = await axios.get(`${import.meta.env.VITE_BASE_URL}/menu/`);
+
+      setMenuItems(res.data);
+    } catch (err) {
+      console.error(err);
+    }
+  }, []);
+
+  const fetchCart = useCallback(async () => {
+    if (!token) return;
+
+    try {
+      const res = await axios.get(
+        `${import.meta.env.VITE_BASE_URL}/users/cart`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
       );
 
-      if (response.status === 200) {
-        setAdmins(response.data.admins);
-      }
-    } catch (error) {
-      console.error("Error fetching admins:", error);
-    }
-  };
+      const items = res.data.cartItems || [];
 
-  fetchAdmins();
-}, []);
-useEffect(() => {
-  const fetchCartItems = async () => {
-    const token = localStorage.getItem('token');
-
-    if (token) {
-      try {
-        const response = await axios.get(
-          `${import.meta.env.VITE_BASE_URL}/users/cart`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
-
-        if (response.status === 200) {
-          const items = response.data.cartItems;
-          setCartItems(items);
-          setCartCount(items.reduce((sum, item) => sum + item.quantity, 0));
-
-          if (items.length > 0) {
-            setCartHotelId(items[0].adminId);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching cart items:", error);
-      }
-    }
-  };
-
-  fetchCartItems();
-}, []);
-
- const handleAddToCart = async (item, adminId) => {
-  const token = localStorage.getItem('token');
-  if (!token) return;
-  if (!item.available) return;
-
-  if (cartHotelId && cartHotelId !== adminId) {
-    setWarning('You can only order from one hotel at a time.');
-    setTimeout(() => setWarning(''), 3000);
-    return;
-  }
-
-  try {
-    const payload = {
-      item: {
-        itemId: item._id,
-        name: item.name,
-        price: item.price,
-        photo: item.photo || '',
-        quantity: 1
-      }
-    };
-
-    const response = await axios.post(
-      `${import.meta.env.VITE_BASE_URL}/users/cart/add`,
-      payload,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      }
-    );
-
-    if (response.status === 201) {
-      const items = response.data.cartItems;
       setCartItems(items);
       setCartCount(items.reduce((sum, item) => sum + item.quantity, 0));
-      setCartHotelId(adminId);
-      setWarning('');
+
+      if (items.length > 0) {
+        setCartRestaurantId(items[0].admin_id);
+      }
+    } catch (err) {
+      console.error(err);
     }
-  } catch (error) {
-    console.error("Error adding to cart:", error);
-  }
-};
+  }, [token]);
 
- const handleRemoveItemFromCart = (itemId) => {
-  setCartItems((prev) => {
-    const updated = prev.filter(item => item.itemId !== itemId);
+  useEffect(() => {
+    const loadData = async () => {
+      await Promise.all([fetchMenu(), fetchCart()]);
+    };
+
+    loadData();
+  }, [fetchMenu, fetchCart]);
+
+  const handleAddToCart = async (item) => {
+    if (!token) {
+      alert("Please login first.");
+      return;
+    }
+
+    if (!item.available) {
+      return;
+    }
+
+    if (cartRestaurantId && cartRestaurantId !== item.admin_id) {
+      setWarning("You can order from only one restaurant at a time.");
+
+      setTimeout(() => {
+        setWarning("");
+      }, 3000);
+
+      return;
+    }
+
+    try {
+      await axios.post(
+        `${import.meta.env.VITE_BASE_URL}/users/cart/add`,
+        {
+          menu_item_id: item.id,
+          quantity: 1,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      await fetchCart();
+
+      setCartRestaurantId(item.admin_id);
+
+      setWarning("");
+    } catch (err) {
+      console.error("Error adding item:", err);
+    }
+  };
+
+  const handleRemoveItem = (id) => {
+    const updated = cartItems.filter((item) => item.id !== id);
+
+    setCartItems(updated);
+
     setCartCount(updated.reduce((sum, item) => sum + item.quantity, 0));
-    if (updated.length === 0) setCartHotelId(null);
-    return updated;
-  });
+
+    if (updated.length === 0) {
+      setCartRestaurantId(null);
+    }
+  };
+
+  const totalPrice = cartItems.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0,
+  );
+
+const handleSearch = async () => {
+    const query = search.trim();
+
+    if (!query) return;
+
+    setSearchQuery(query); // Save the searched text
+    setSearch("");         // Clear only the input
+
+    const response = await axios.post(
+        `${import.meta.env.VITE_BASE_URL}/ai/search`,
+        { query }
+    );
+
+    setMenuItems(response.data);
+    console.log("AI Search Results:", response.data);
+    setIsAISearch(true);
 };
 
-const totalPrice = cartItems.reduce(
-  (total, item) => total + item.price * item.quantity,
-  0
-);
+  const categories = [
+    { id: 0, name: "All" },
+    { id: 1, name: "Pizza" },
+    { id: 2, name: "Burger" },
+    { id: 3, name: "Chinese" },
+    { id: 4, name: "North Indian" },
+    { id: 5, name: "South Indian" },
+    { id: 6, name: "Dessert" },
+    { id: 7, name: "Drinks" },
+  ];
+
   return (
-  <div className="min-h-screen flex flex-col bg-gray-50 relative pb-20">
-    <div className="flex items-center justify-between px-4 pt-4">
-      <img
-        className="w-14 ml-2 mb-6"
-        src="https://cdn-icons-png.flaticon.com/128/3063/3063822.png"
-        alt="Logo"
-      />
-    </div>
+    <div className="min-h-screen bg-gray-100 pb-24">
+      <div className="bg-white shadow-md p-5 sticky top-0 z-20">
+        <h1 className="text-3xl font-bold text-center">Food Ordering</h1>
 
-    <div
-      ref={cartPanelRef}
-      className={`fixed z-10 bottom-0 px-3 py-10 bg-white w-full transition-transform duration-300 ${
-        cartPanelOpen ? 'translate-y-0' : 'translate-y-full'
-      }`}
-    >
-      <CartPanel
-        cartItems={cartItems}
-        setCartPanelOpen={setCartPanelOpen}
-        onRemove={handleRemoveItemFromCart}
-      />
-    </div>
+        <div className="mt-5 flex gap-3">
+          <input
+            type="text"
+            placeholder="Search food..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                handleSearch();
+              }
+            }}
+            className="flex-1 border rounded-xl p-3 outline-none"
+          />
+          <button
+            onClick={handleSearch}
+            className="bg-green-600 text-white px-5 rounded-xl"
+          >
+            Search
+          </button>
 
-    <div className="p-4 flex-grow">
-      <h1 className="text-3xl font-bold mb-6 text-center text-black">
-        Food Menu
-      </h1>
+          <button className="bg-green-600 text-white px-5 rounded-xl">
+            <i className="ri-map-pin-line"></i>
+          </button>
+        </div>
+        <div className="flex gap-2 mt-4 overflow-x-auto">
+          {categories.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => setCategory(cat.id)}
+              className={`px-4 py-2 rounded-full ${
+                category === cat.id
+                  ? "bg-green-600 text-white"
+                  : "bg-white border"
+              }`}
+            >
+              {cat.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Warning */}
 
       {warning && (
-        <div className="bg-yellow-100 text-yellow-800 p-2 mb-4 rounded text-center text-sm">
+        <div className="bg-yellow-100 text-yellow-700 p-3 text-center">
           {warning}
         </div>
       )}
 
-      {admins.filter(admin => admin.items?.length).length === 0 ? (
-        <p className="text-center text-base">No admin items available.</p>
-      ) : (
-        admins
-          .filter(admin => admin.items?.length)
-          .map((admin) => (
-            <div
-              key={admin._id}
-              className="mb-6 border border-gray-200 p-5 rounded-xl bg-white shadow-sm"
-            >
-              <h2 className="text-xl font-semibold mb-4 text-gray-800">
-                {admin.hotelname}
-              </h2>
+      {/* Menu */}
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {admin.items.map((item) => (
-                  <div
-                    key={item._id}
-                    className="border rounded-xl p-3 bg-gradient-to-br from-blue-50 to-pink-50 flex flex-col shadow hover:shadow-md transition-shadow"
-                  >
-                    <img
-                      src={item.photo || 'https://via.placeholder.com/100'}
-                      alt={item.name}
-                      className="w-full h-28 object-cover rounded-md mb-2"
-                    />
+      <div className="p-5">
+        {filteredMenuItems.length === 0 ? (
+          <h2 className="text-center text-gray-500">No Food Found</h2>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+            {filteredMenuItems.map((item) => (
+              <div
+                key={item.id}
+                className="border rounded-xl overflow-hidden hover:shadow-lg transition bg-white"
+              >
+                <img
+                  src={item.image || "https://via.placeholder.com/300"}
+                  alt={item.name}
+                  className="w-full h-40 object-cover"
+                />
 
-                    <h3 className="text-base font-medium mb-1">
-                      {item.name}
-                    </h3>
+                <div className="p-4">
+                  <div className="flex justify-between">
+                    <h3 className="font-semibold">{item.name}</h3>
 
-                    <p className="text-gray-700 text-sm mb-1">
-                      ₹{item.price.toFixed(2)}
-                    </p>
-
-                    <p className="text-xs text-gray-500 mt-auto">
-                      {item.available ? 'Available' : 'Unavailable'}
-                    </p>
-
-                    <button
-                      onClick={() => handleAddToCart(item, admin._id)}
-                      className={`mt-3 text-xs font-semibold px-3 py-1 rounded-full transition-colors ${
-                        item.available
-                          ? 'bg-gradient-to-r from-green-400 to-blue-500 text-white hover:from-green-500 hover:to-blue-600'
-                          : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      }`}
-                      disabled={!item.available}
-                    >
-                      {item.available ? '+ Add to Cart' : 'Unavailable'}
-                    </button>
+                    <span>₹{item.price}</span>
                   </div>
-                ))}
-              </div>
-            </div>
-          ))
-      )}
-    </div>
 
-    <footer className="fixed bottom-0 left-0 right-0 bg-white p-2 shadow-inner">
-      <div className="flex relative justify-evenly items-center bg-zinc-300 rounded-lg p-2">
-        <button
-          onClick={() => setCartPanelOpen(true)}
-          className="flex relative items-center space-x-2 bg-white border border-indigo-300 rounded-full px-4 py-2 text-sm text-indigo-700 hover:bg-indigo-200"
-        >
-          <div className="bg-gray-100 rounded-full p-1 relative">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13l-1.293 2.293a1 1 0 00.293 1.414l1.414 1.414a1 1 0 001.414-.293L12 13m0 0l3 6m-3-6L9 19"
-              />
-            </svg>
+                  <p className="text-sm text-gray-500 mt-2">
+                    {item.description}
+                  </p>
+
+                  <div className="flex gap-2 mt-3 flex-wrap">
+                    {item.is_vegetarian ? (
+                      <span className="bg-green-100 text-green-700 px-2 rounded">
+                        Veg
+                      </span>
+                    ) : (
+                      <span className="bg-red-100 text-red-700 px-2 rounded">
+                        Non Veg
+                      </span>
+                    )}
+
+                    {item.is_spicy && (
+                      <span className="bg-orange-100 text-orange-700 px-2 rounded">
+                        🌶 Spicy
+                      </span>
+                    )}
+                  </div>
+
+                  <button
+                    disabled={!item.available}
+                    onClick={() => handleAddToCart(item)}
+                    className={`w-full mt-4 py-2 rounded-xl ${
+                      item.available
+                        ? "bg-green-600 hover:bg-green-700 text-white"
+                        : "bg-gray-300 text-gray-600"
+                    }`}
+                  >
+                    {item.available ? "Add To Cart" : "Unavailable"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      {/* Cart Panel */}
+
+      <div
+        ref={cartPanelRef}
+        className={`fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl transition-transform duration-300 z-50 ${
+          cartPanelOpen ? "translate-y-0" : "translate-y-full"
+        }`}
+      >
+        <CartPanel
+          cartItems={cartItems}
+          setCartPanelOpen={setCartPanelOpen}
+          setLocationPanelOpen={setLocationPanelOpen}
+          onRemove={handleRemoveItem}
+        />
+      </div>
+
+      {/* Location Panel */}
+
+      {locationPanelOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-end z-40">
+          <div className="bg-white rounded-t-3xl w-full p-5 max-h-[70vh] overflow-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">Select Delivery Location</h2>
+
+              <button onClick={() => setLocationPanelOpen(false)}>✕</button>
+            </div>
+
+            <LocationSearchPanel
+              setConfirmOrderPanel={setConfirmOrderPanel}
+              setPanelopen={setLocationPanelOpen}
+              setSelectedLocation={setSelectedLocation}
+              searchQuery={search}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Order */}
+
+      {confirmOrderPanel && (
+        <div className="fixed inset-0 bg-black/40 flex items-end z-50">
+          <div className="bg-white rounded-t-3xl w-full">
+            <ConfirmOrder
+              setConfirmOrderPanel={setConfirmOrderPanel}
+              setLookingForAcceptancePanel={() => {}}
+              setOrderId={() => {}}
+              selectedLocation={selectedLocation}
+              totalPrice={totalPrice}
+              setTotalPrice={() => {}}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Bottom Navigation */}
+
+      <footer className="fixed bottom-0 left-0 right-0 bg-white shadow-lg p-4">
+        <div className="flex justify-around">
+          <button
+            onClick={() => setCartPanelOpen(true)}
+            className="relative flex flex-col items-center"
+          >
+            <i className="ri-shopping-cart-2-line text-2xl"></i>
 
             {cartCount > 0 && (
-              <span className="absolute top-0 right-0 inline-flex items-center justify-center px-1 text-xs font-bold text-white transform translate-x-1/2 -translate-y-1/2 bg-red-600 rounded-full">
+              <span className="absolute -top-2 right-0 bg-red-600 text-white text-xs rounded-full px-2">
                 {cartCount}
               </span>
             )}
-          </div>
 
-          <span>Cart</span>
-        </button>
+            <span className="text-sm">Cart</span>
+          </button>
 
-        <Link
-          to="user-profile"
-          className="flex items-center space-x-2 bg-white border border-blue-200 rounded-full px-4 py-2 text-sm text-blue-700 hover:bg-blue-200"
-        >
-          <div className="bg-gray-100 rounded-full p-1">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5.121 17.804A8.966 8.966 0 0112 16c2.21 0 4.21.713 5.879 1.804M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-              />
-            </svg>
-          </div>
+          <Link to="/user-profile" className="flex flex-col items-center">
+            <i className="ri-user-3-line text-2xl"></i>
 
-          <span>Profile</span>
-        </Link>
-      </div>
-    </footer>
-
-    {confirmOrderPanel && (
-      <ConfirmOrder
-        setConfirmOrderPanel={setConfirmOrderPanel}
-        setAcceptedOrderPanel={setAcceptedOrderPanel}
-        selectedLocation={selectedLocation}
-        totalPrice={totalPrice}
-      />
-    )}
-  </div>
-);
+            <span className="text-sm">Profile</span>
+          </Link>
+        </div>
+      </footer>
+    </div>
+  );
 };
 
 export default UserHome;

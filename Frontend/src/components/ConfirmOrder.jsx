@@ -1,142 +1,194 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 
 const ConfirmOrder = ({
   setConfirmOrderPanel,
   setLookingForAcceptancePanel,
   setOrderId,
-  selectedLocation,
-  totalPrice,
-  setTotalPrice
+  selectedLocation
 }) => {
   const [cartItems, setCartItems] = useState([]);
+  const [totalPrice, setTotalPrice] = useState(0);
+  const [loading, setLoading] = useState(false);
+
+  const fetchCart = useCallback(async () => {
+    const token = localStorage.getItem("token");
+
+    if (!token) return;
+
+    try {
+      const res = await axios.get(
+        `${import.meta.env.VITE_BASE_URL}/users/cart`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      const items = res.data.cartItems || [];
+
+      setCartItems(items);
+
+      const total = items.reduce(
+        (sum, item) => sum + item.price * item.quantity,
+        0
+      );
+
+      setTotalPrice(total);
+
+    } catch (err) {
+      console.error("Cart Fetch Error:", err);
+    }
+  }, []);
 
   useEffect(() => {
-    const fetchCartItems = async () => {
-      const token = localStorage.getItem("token");
-      try {
-        const response = await axios.get(
-          `${import.meta.env.VITE_BASE_URL}/users/cart`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-
-        const fetchedCartItems = response.data.cartItems;
-
-        if (Array.isArray(fetchedCartItems)) {
-          const computedTotal = fetchedCartItems.reduce(
-            (acc, item) => acc + item.price * item.quantity,
-            0
-          );
-
-          setCartItems(fetchedCartItems);
-          setTotalPrice(computedTotal);
-        }
-      } catch (error) {
-        console.error("Error fetching cart items:", error);
-      }
-    };
-
-    fetchCartItems();
-  }, [setTotalPrice]);
+    fetchCart();
+  }, [fetchCart]);
 
   const handleConfirmOrder = async () => {
     const token = localStorage.getItem("token");
 
+    if (!token) {
+      alert("Please login first.");
+      return;
+    }
+
+    if (!selectedLocation) {
+      alert("Please select a delivery location.");
+      return;
+    }
+
+    setLoading(true);
+
     try {
-      const adminResponse = await axios.post(
-        `${import.meta.env.VITE_BASE_URL}/admins/getadmin`,
-        { cartItems },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      const adminId = adminResponse.data.adminId;
-
-      if (!adminId) {
-        console.error("No admin found for the selected items.");
-        return;
-      }
-
-      const orderData = {
-        cartItems,
-        totalPrice,
-        selectedLocation,
-        adminId,
-      };
-
       const response = await axios.post(
-        `${import.meta.env.VITE_BASE_URL}/admins/send-order`,
-        orderData,
-        { headers: { Authorization: `Bearer ${token}` } }
+        `${import.meta.env.VITE_BASE_URL}/orders/`,
+        {
+          selected_location: selectedLocation
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
       );
 
-      if (response.status === 200) {
-        const returnedOrderId = response.data.orderId;
+      setOrderId(
+        response.data.order_id || response.data.id
+      );
 
-        if (returnedOrderId) {
-          await axios.post(
-            `${import.meta.env.VITE_BASE_URL}/users/cart/confirm`,
-            { orderId: returnedOrderId },
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            }
-          );
+      setConfirmOrderPanel(false);
 
-          setOrderId(returnedOrderId);
-          setConfirmOrderPanel(false);
-          setLookingForAcceptancePanel(true);
-        }
-      }
-    } catch (error) {
-      console.error("Error confirming order:", error);
+      setLookingForAcceptancePanel(true);
+
+    } catch (err) {
+      console.error("Order Error:", err);
+
+      alert(
+        err.response?.data?.detail ||
+        "Unable to place order."
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div>
-      <h5
+    <div className="relative bg-white rounded-t-3xl shadow-xl p-6">
+
+      <button
         onClick={() => setConfirmOrderPanel(false)}
-        className="absolute top-0 text-center w-[93%]"
+        className="absolute top-3 left-1/2 -translate-x-1/2"
       >
-        <i className="text-3xl text-gray-400 ri-arrow-down-wide-line"></i>
-      </h5>
-      <h3 className="font-semibold mb-5 p-3 text-2xl">Confirm Your Order</h3>
-      <div className="flex justify-center gap-2 items-center flex-col">
-        <img
-          className="h-24"
-          src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTi_aWDFShDagKlHGeUT87aKYCRp_hTWs1t_g&s"
-          alt="Food ready image"
-        />
-        <div className="w-full mt-5">
-          <div className="flex gap-5 items-center p-3 border-b-2">
-            <i className="text-lg ri-map-pin-2-line"></i>
-            <div className="flex flex-col">
-              <h3 className="font-bold">
-                {selectedLocation ? selectedLocation : "562/11-A"}
-              </h3>
-              <p className="text-sm -mt-1 text-gray-600">
-                {selectedLocation
-                  ? "Selected location"
-                  : "Hotel Chhava, Chhatrapati Sambhaji Maharaj Nagar"}
-              </p>
+        <i className="ri-arrow-down-wide-line text-3xl text-gray-500"></i>
+      </button>
+
+      <h2 className="text-2xl font-bold mt-8 mb-6">
+        Confirm Order
+      </h2>
+
+      <img
+        src="https://cdn-icons-png.flaticon.com/512/2921/2921822.png"
+        alt="Food"
+        className="w-28 mx-auto mb-6"
+      />
+
+      <div className="space-y-4 max-h-64 overflow-y-auto">
+
+        {cartItems.map((item) => (
+
+          <div
+            key={item.id}
+            className="flex justify-between items-center border rounded-xl p-3"
+          >
+
+            <div className="flex items-center gap-3">
+
+              <img
+                src={item.image}
+                alt={item.name}
+                className="w-14 h-14 rounded-lg object-cover"
+              />
+
+              <div>
+
+                <h4 className="font-semibold">
+                  {item.name}
+                </h4>
+
+                <p className="text-sm text-gray-500">
+                  Qty : {item.quantity}
+                </p>
+
+              </div>
+
             </div>
+
+            <h3 className="font-bold">
+              ₹{(item.price * item.quantity).toFixed(2)}
+            </h3>
+
           </div>
-          <div className="flex gap-5 items-center p-3">
-            <i className="text-lg ri-money-rupee-circle-line"></i>
-            <div className="flex gap-2">
-              <h3 className="font-semibold">Total Price :- </h3>
-              <h2>₹{totalPrice ? totalPrice.toFixed(2) : "0.00"}</h2>
-            </div>
-          </div>
-        </div>
-        <button
-          onClick={handleConfirmOrder}
-          className="bg-green-500 hover:bg-green-600 mt-5 p-2 font-bold text-lg text-white border-2 rounded-xl w-full h-full border-black"
-        >
-          Confirm Order
-        </button>
+
+        ))}
+
       </div>
+
+      <div className="border-t mt-6 pt-5 space-y-3">
+
+        <div className="flex justify-between">
+
+          <span className="font-semibold">
+            Delivery Address
+          </span>
+
+          <span className="text-gray-600">
+            {selectedLocation || "Not Selected"}
+          </span>
+
+        </div>
+
+        <div className="flex justify-between text-2xl font-bold">
+
+          <span>Total</span>
+
+          <span>
+            ₹{totalPrice.toFixed(2)}
+          </span>
+
+        </div>
+
+      </div>
+
+      <button
+        disabled={loading}
+        onClick={handleConfirmOrder}
+        className="w-full mt-8 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white py-3 rounded-xl text-lg font-semibold"
+      >
+        {loading ? "Placing Order..." : "Place Order"}
+      </button>
+
     </div>
   );
 };

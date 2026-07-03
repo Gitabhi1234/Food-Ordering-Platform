@@ -78,7 +78,7 @@ const Home = () => {
     }
   }, [lookingForAcceptancePanel]);
 
-  useEffect(() => {}, [orderId]);
+ 
 
   return (
     <div className="h-screen relative overflow-hidden">
@@ -164,11 +164,11 @@ const Home = () => {
         />
       </div>
 
-      <div
+     <div
         ref={lookingForAcceptancePanelRef}
         className="fixed z-10 bottom-0 px-3 py-6 translate-y-full bg-white w-full"
       >
-        {orderId && (
+        {orderId !== null && (
           <LookingForAdminAcceptance
             setAcceptedOrderPanel={setAcceptedOrderPanel}
             setRejectedOrderPanel={setRejectedOrderPanel}

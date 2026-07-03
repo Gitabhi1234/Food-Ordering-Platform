@@ -1,298 +1,601 @@
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
-import { useDropzone } from 'react-dropzone';
+import React, { useEffect, useState, useCallback } from "react";
+import axios from "axios";
+import { useNavigate } from "react-router-dom";
+import { useDropzone } from "react-dropzone";
 
 const AdminHome = () => {
-  const [items, setItems] = useState([]);
-  const [adminDetails, setAdminDetails] = useState({});
-  const [name, setName] = useState('');
-  const [price, setPrice] = useState('');
-  const [photo, setPhoto] = useState(''); // still string (URL)
-  const [file, setFile] = useState(null); // ✅ new
-  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-  const token = localStorage.getItem('token');
 
-  
+  const token = localStorage.getItem("token");
+
+  const [loading, setLoading] = useState(true);
+
+  const [items, setItems] = useState([]);
+
+  const [adminDetails, setAdminDetails] = useState({});
+
+  const [name, setName] = useState("");
+
+  const [description, setDescription] = useState("");
+
+  const [category, setCategory] = useState("");
+
+  const [price, setPrice] = useState("");
+
+  const [photo, setPhoto] = useState("");
+
+  const [file, setFile] = useState(null);
+
+  const [isVegetarian, setIsVegetarian] = useState(false);
+
+  const [isSpicy, setIsSpicy] = useState(false);
+
+  const [available, setAvailable] = useState(true);
+
+  const [editingItem, setEditingItem] = useState(null);
+
   const { getRootProps, getInputProps } = useDropzone({
-    accept: { 'image/*': [] },
+    accept: {
+      "image/*": [],
+    },
+
     multiple: false,
+
     onDrop: (acceptedFiles) => {
       const selectedFile = acceptedFiles[0];
+
+      if (!selectedFile) return;
+
       setFile(selectedFile);
 
-      // create preview URL (temporary)
-      const previewUrl = URL.createObjectURL(selectedFile);
-      setPhoto(previewUrl);
-    }
+      setPhoto(URL.createObjectURL(selectedFile));
+    },
   });
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const [itemsResponse, profileResponse] = await Promise.all([
-          axios.get(`${import.meta.env.VITE_BASE_URL}/Admins/items`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          axios.get(`${import.meta.env.VITE_BASE_URL}/Admins/profile`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-        ]);
+  const fetchData = useCallback(async () => {
+    setLoading(true);
 
-        if (itemsResponse.status === 200) setItems(itemsResponse.data.items || []);
-        if (profileResponse.status === 200) setAdminDetails(profileResponse.data || {});
-      } catch (error) {
-        console.error('Error fetching admin data:', error);
-      } finally {
-        setLoading(false);
+    try {
+      const [menuRes, profileRes] = await Promise.all([
+        axios.get(`${import.meta.env.VITE_BASE_URL}/menu/admin`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }),
+
+        axios.get(`${import.meta.env.VITE_BASE_URL}/admins/profile`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }),
+      ]);
+
+      setItems(menuRes.data.items || menuRes.data);
+
+      setAdminDetails(profileRes.data.admin || profileRes.data);
+
+    } catch (err) {
+      console.error("Fetch Error:", err);
+
+      if (err.response?.status === 401) {
+        localStorage.removeItem("token");
+        navigate("/admin-login");
       }
-    };
+    } finally {
+      setLoading(false);
+    }
+  }, [token, navigate]);
 
-    if (token) fetchData();
-  }, [token]);
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+const submitHandler = async (e) => {
+  e.preventDefault();
 
-  const submitHandler = async (e) => {
-    e.preventDefault();
+  const categoryMap = {
+    Pizza: 1,
+    Burger: 2,
+    Biryani: 3,
+    Chinese: 4,
+    "South Indian": 5,
+    "North Indian": 6,
+    Dessert: 7,
+    Drinks: 8,
+  };
 
-    let finalPhoto = photo;
+  let imageUrl = editingItem?.image || "";
 
-    // ✅ If file selected → upload first
+  try {
+    // Upload image to Cloudinary
     if (file) {
       const formData = new FormData();
       formData.append("image", file);
 
-      try {
-        const uploadRes = await axios.post(
-          `${import.meta.env.VITE_BASE_URL}/upload`,
-          formData
-        );
-
-        finalPhoto = uploadRes.data.imageUrl;
-      } catch (err) {
-        console.error("Image upload failed:", err);
-      }
-    }
-
-    const newItem = { name, price, photo: finalPhoto };
-
-    try {
-      const response = await axios.post(
-        `${import.meta.env.VITE_BASE_URL}/Admins/add-item`,
-        newItem,
-        { headers: { Authorization: `Bearer ${token}` } }
+      const uploadResponse = await axios.post(
+        `${import.meta.env.VITE_BASE_URL}/upload`,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
       );
-      if (response.status === 200 || response.status === 201) {
-        setItems((prev) => [...prev, response.data.item]);
-      }
-    } catch (error) {
-      console.error('Error adding item:', error);
+
+      imageUrl = uploadResponse.data.imageUrl;
     }
 
-    setName('');
-    setPrice('');
-    setPhoto('');
+    const menuData = {
+      name: name.trim(),
+      description: description.trim(),
+      category_id: categoryMap[category],
+      price: Number(price),
+      image: imageUrl,
+      is_vegetarian: isVegetarian,
+      is_spicy: isSpicy,
+      available,
+    };
+
+    if (editingItem) {
+      await axios.put(
+        `${import.meta.env.VITE_BASE_URL}/menu/${editingItem.id}`,
+        menuData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+    } else {
+      console.log(menuData);
+      await axios.post(
+        `${import.meta.env.VITE_BASE_URL}/menu/`,
+        menuData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+    }
+
+    await fetchData();
+
+    if (photo.startsWith("blob:")) {
+      URL.revokeObjectURL(photo);
+    }
+
+    setName("");
+    setDescription("");
+    setCategory("");
+    setPrice("");
+    setPhoto("");
     setFile(null);
-  };
+    setIsVegetarian(false);
+    setIsSpicy(false);
+    setAvailable(true);
+    setEditingItem(null);
 
-  const toggleAvailability = async (itemId) => {
-    try {
-      const response = await axios.post(
-        `${import.meta.env.VITE_BASE_URL}/Admins/toggle-item/${itemId}`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (response.status === 200) {
-        setItems((prev) =>
-          prev.map((item) =>
-            item._id === itemId ? { ...item, available: response.data.available } : item
-          )
-        );
-      }
-    } catch (error) {
-      console.error('Error toggling availability:', error);
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    navigate('/Admin-login');
-  };
-
-  const handleBack = () => {
-    navigate('/Admin-home1');
-  };
-
-  const handleViewEarnings = async () => {
-    try {
-      const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/Admins/weekly-earnings`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (response.status === 200) {
-        navigate('/Admin-dashboard', { state: { earningsData: response.data } });
-      }
-    } catch (error) {
-      console.error('Error fetching earnings:', error);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f9fafb]">
-        <p className="text-gray-500 text-lg">Loading admin profile...</p>
-      </div>
-    );
+  } catch (err) {
+    console.log(err.response?.data || err);
   }
+};
+const editItem = (item) => {
+  setEditingItem(item);
 
+  setName(item.name);
+  setDescription(item.description);
+
+  setCategory(
+    typeof item.category === "object"
+      ? item.category.name
+      : item.category
+  );
+
+  setPrice(item.price);
+  setPhoto(item.image || "");
+
+  setIsVegetarian(item.is_vegetarian);
+  setIsSpicy(item.is_spicy);
+  setAvailable(item.available);
+};
+
+const deleteItem = async (id) => {
+  if (!window.confirm("Delete this menu item?")) return;
+
+  try {
+    await axios.delete(
+      `${import.meta.env.VITE_BASE_URL}/menu/${id}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    await fetchData();
+
+  } catch (err) {
+    console.error("Delete Error:", err);
+
+    if (err.response?.status === 401) {
+      localStorage.removeItem("token");
+      navigate("/admin-login");
+    }
+  }
+};
+
+const toggleAvailability = async (item) => {
+  try {
+    await axios.patch(
+      `${import.meta.env.VITE_BASE_URL}/menu/${item.id}/availability`,
+      {
+        available: !item.available,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    await fetchData();
+
+  } catch (err) {
+    console.error("Availability Update Error:", err);
+
+    if (err.response?.status === 401) {
+      localStorage.removeItem("token");
+      navigate("/admin-login");
+    }
+  }
+};
+
+const handleLogout = () => {
+  localStorage.removeItem("token");
+  navigate("/admin-login", { replace: true });
+};
+
+const handleBack = () => {
+  navigate("/admin-home1");
+};
+
+const handleViewDashboard = () => {
+  navigate("/admin-dashboard");
+};
+
+if (loading) {
   return (
-  <div className="min-h-screen bg-[#f9fafb] p-6">
-    <div className="flex items-center justify-between mb-6">
-      <div className="flex flex-col items-center">
+    <div className="min-h-screen flex justify-center items-center">
+      <h2 className="text-xl font-semibold">
+        Loading Dashboard...
+      </h2>
+    </div>
+  );
+}
+return (
+  <div className="min-h-screen bg-gray-100 p-6">
+
+    {/* Header */}
+    <div className="flex justify-between items-center mb-8">
+      <div className="flex items-center gap-4">
         <img
-          className="w-16"
           src="https://cdn-icons-png.flaticon.com/128/3063/3063822.png"
-          alt="Logo"
+          className="w-16"
+          alt=""
         />
-        <h1 className="text-xl font-bold text-gray-800">
-          {adminDetails?.fullname?.firstname || 'Admin'}{' '}
-          {adminDetails?.fullname?.lastname || ''}
-        </h1>
-        <p className="text-sm text-gray-500">
-          {adminDetails?.email || 'email@example.com'}
-        </p>
+
+        <div>
+          <h1 className="text-2xl font-bold">
+            Welcome,{" "}
+            {adminDetails.first_name || "Admin"}
+          </h1>
+
+          <p className="text-gray-500">
+            {adminDetails.email}
+          </p>
+
+          {/* Optional */}
+          {adminDetails.restaurant_name && (
+            <p className="text-sm text-gray-500">
+              {adminDetails.restaurant_name}
+            </p>
+          )}
+        </div>
       </div>
 
-      <div className="flex gap-4">
+      <div className="space-x-3">
+
         <button
           onClick={handleBack}
-          className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded"
+          className="bg-gray-400 text-white px-4 py-2 rounded"
         >
-          Back
+          Orders
         </button>
 
         <button
-          onClick={handleViewEarnings}
-          className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded"
+          onClick={handleViewDashboard}
+          className="bg-purple-600 text-white px-4 py-2 rounded"
         >
-          View Weekly Earnings
+          Dashboard
         </button>
 
         <button
           onClick={handleLogout}
-          className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+          className="bg-red-500 text-white px-4 py-2 rounded"
         >
           Logout
         </button>
+
       </div>
     </div>
 
-    <div className="bg-white p-6 rounded-xl shadow-md mb-8">
-      <h2 className="text-xl font-semibold mb-4 text-gray-700">
-        Add New Item
+    {/* Add Menu */}
+
+    <div className="bg-white rounded-xl shadow p-6 mb-8">
+
+      <h2 className="text-2xl font-bold mb-5">
+
+        {editingItem ? "Edit Menu Item" : "Add Menu Item"}
+
       </h2>
 
-      <form onSubmit={submitHandler} className="flex flex-wrap gap-4">
+      <form
+        onSubmit={submitHandler}
+        className="grid grid-cols-1 md:grid-cols-2 gap-4"
+      >
+
         <input
-          type="text"
+          required
+          className="border rounded p-3"
+          placeholder="Food Name"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Food Name"
-          className="border px-4 py-2 rounded w-full sm:w-[30%]"
         />
 
         <input
+          required
+          className="border rounded p-3"
+          placeholder="Price"
           type="number"
           value={price}
           onChange={(e) => setPrice(e.target.value)}
-          placeholder="Price"
-          className="border px-4 py-2 rounded w-full sm:w-[30%]"
         />
 
-        <div
-          {...getRootProps()}
-          className="border-2 border-dashed px-4 py-6 rounded w-full sm:w-[30%] text-center cursor-pointer"
-        >
-          <input {...getInputProps()} />
-          <p>Drag & drop image here</p>
-        </div>
-
-        <button
-          type="submit"
-          className="bg-green-500 text-white px-6 py-2 rounded hover:bg-green-600"
-        >
-          Add Item
-        </button>
-      </form>
-
-      {photo && (
-        <img
-          src={photo}
-          alt="preview"
-          className="mt-4 w-24 h-24 object-cover rounded"
+        <textarea
+          required
+          rows="3"
+          className="border rounded p-3 md:col-span-2"
+          placeholder="Description"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
         />
-      )}
-    </div>
 
-    <div className="bg-white p-6 rounded-xl shadow-md">
-      <h2 className="text-xl font-semibold mb-4 text-gray-700">
-        Current Inventory
-      </h2>
+        <select
+          required
+          className="border rounded p-3"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+        >
 
-      {items.length === 0 ? (
-        <p className="text-gray-500">No items added yet.</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full border text-sm text-gray-700">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="px-4 py-2 border">Photo</th>
-                <th className="px-4 py-2 border">Name</th>
-                <th className="px-4 py-2 border">Price</th>
-                <th className="px-4 py-2 border">Status</th>
-                <th className="px-4 py-2 border">Toggle</th>
-              </tr>
-            </thead>
+          <option value="">Choose Category</option>
 
-            <tbody>
-              {items.map((item) => (
-                <tr
-                  key={item._id}
-                  className={item.available ? 'bg-white' : 'bg-gray-100'}
-                >
-                  <td className="px-4 py-2 border">
-                    <img
-                      src={item.photo || 'https://via.placeholder.com/50'}
-                      alt={item.name}
-                      className="w-12 h-12 object-cover rounded"
-                    />
-                  </td>
+          <option>Pizza</option>
 
-                  <td className="px-4 py-2 border">{item.name}</td>
+          <option>Burger</option>
 
-                  <td className="px-4 py-2 border">₹{item.price}</td>
+          <option>Biryani</option>
 
-                  <td className="px-4 py-2 border">
-                    {item.available ? 'Available' : 'Unavailable'}
-                  </td>
+          <option>Chinese</option>
 
-                  <td className="px-4 py-2 border">
-                    <button
-                      onClick={() => toggleAvailability(item._id)}
-                      className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded"
-                    >
-                      Toggle
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
+          <option>South Indian</option>
+
+          <option>North Indian</option>
+
+          <option>Dessert</option>
+
+          <option>Drinks</option>
+
+        </select>
+
+        <div className="flex gap-6 items-center">
+
+          <label className="flex gap-2">
+
+            <input
+              type="checkbox"
+              checked={isVegetarian}
+              onChange={(e) => setIsVegetarian(e.target.checked)}
+            />
+
+            Vegetarian
+
+          </label>
+
+          <label className="flex gap-2">
+
+  <input
+    type="checkbox"
+    checked={isSpicy}
+    onChange={(e) => setIsSpicy(e.target.checked)}
+  />
+
+  Spicy
+
+</label>
+
+<label className="flex gap-2">
+
+  <input
+    type="checkbox"
+    checked={available}
+    onChange={(e) => setAvailable(e.target.checked)}
+  />
+
+  Available
+
+</label>
+
+</div>
+
+<div
+  {...getRootProps()}
+  className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer md:col-span-2"
+>
+
+  <input {...getInputProps()} />
+
+  <p>Drag & Drop Food Image</p>
+
+</div>
+
+{photo && (
+
+  <img
+    src={photo}
+    className="h-24 rounded"
+    alt="Food Preview"
+  />
+
+)}
+
+<button
+  type="submit"
+  className="bg-green-600 hover:bg-green-700 text-white rounded py-3 md:col-span-2"
+>
+
+  {editingItem ? "Update Menu Item" : "Add Menu Item"}
+
+</button>
+
+</form>
+
+</div>
+
+{/* Inventory */}
+
+<div className="bg-white rounded-xl shadow p-6">
+
+  <h2 className="text-2xl font-bold mb-5">
+
+    Current Menu
+
+  </h2>
+
+  <div className="overflow-auto">
+
+    <table className="w-full">
+
+      <thead>
+
+        <tr className="bg-gray-200">
+
+          <th className="p-3">Image</th>
+
+          <th>Name</th>
+
+          <th>Price</th>
+
+          <th>Veg</th>
+
+          <th>Spicy</th>
+
+          <th>Status</th>
+
+          <th>Actions</th>
+
+        </tr>
+
+      </thead>
+
+      <tbody>
+
+        {items.map((item) => (
+
+          <tr
+            key={item.id}
+            className="border-b text-center"
+          >
+
+            <td className="p-2">
+
+              <img
+                src={item.image}
+                className="h-14 w-14 rounded mx-auto object-cover"
+                alt={item.name}
+              />
+
+            </td>
+
+            <td>{item.name}</td>
+
+            
+
+            <td>₹{item.price}</td>
+
+            <td>
+
+              {item.is_vegetarian
+                ? "🟢 Veg"
+                : "🔴 Non Veg"}
+
+            </td>
+
+            <td>
+
+              {item.is_spicy
+                ? "🌶"
+                : "-"}
+
+            </td>
+
+            <td>
+
+              {item.available
+                ? "Available"
+                : "Unavailable"}
+
+            </td>
+
+            <td className="space-x-2">
+
+              <button
+                onClick={() => editItem(item)}
+                className="bg-blue-500 text-white px-3 py-1 rounded"
+              >
+                Edit
+              </button>
+
+              <button
+                onClick={() => deleteItem(item.id)}
+                className="bg-red-500 text-white px-3 py-1 rounded"
+              >
+                Delete
+              </button>
+
+              <button
+                onClick={() => toggleAvailability(item)}
+                className="bg-green-500 text-white px-3 py-1 rounded"
+              >
+                Toggle
+              </button>
+
+            </td>
+
+          </tr>
+
+        ))}
+
+      </tbody>
+
+    </table>
+
   </div>
+
+</div>
+
+</div>
 );
+
 };
 
 export default AdminHome;

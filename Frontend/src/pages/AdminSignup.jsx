@@ -1,57 +1,64 @@
-import React, { useState, useContext } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import AdminDataContext from '../context/AdminDataContext';
-import axios from 'axios';
+import React, { useState, useContext } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import AdminDataContext from "../context/AdminDataContext";
+import axios from "axios";
 
 const AdminSignup = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [firstname, setFirstName] = useState('');
-  const [lastname, setLastName] = useState('');
-  const [hotelname, setHotelName] = useState('');
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [firstname, setFirstName] = useState("");
+  const [lastname, setLastName] = useState("");
+  const [hotelname, setHotelName] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const navigate = useNavigate();
   const { setAdmin } = useContext(AdminDataContext);
 
   const submitHandler = async (e) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
+    setError("");
+    setSuccess("");
 
     const adminData = {
-      fullname: { firstname, lastname },
-      hotelname,
-      email,
+      restaurant_name: hotelname.trim(),
+      first_name: firstname.trim(),
+      last_name: lastname.trim(),
+      email: email.trim(),
       password,
     };
 
     try {
       const response = await axios.post(
         `${import.meta.env.VITE_BASE_URL}/admins/register`,
-        adminData
+        adminData,
       );
 
       if (response.status === 201) {
         const data = response.data;
+
         setAdmin(data.admin);
-        localStorage.setItem('token', data.token);
-        setSuccess('Account created successfully!');
-        setTimeout(() => navigate('/admin-home1'));
+
+        localStorage.setItem("token", data.access_token || data.token);
+
+        setSuccess("Account created successfully!");
+
+        setTimeout(() => {
+          navigate("/admin-home1");
+        }, 1);
       }
     } catch (error) {
       const msg =
-        error?.response?.data?.message ||
-        'Registration failed. Please try again.';
+        error?.response?.data?.detail ||
+        "Registration failed. Please try again.";
       setError(msg);
     }
 
-    setEmail('');
-    setPassword('');
-    setFirstName('');
-    setLastName('');
-    setHotelName('');
+    setEmail("");
+    setPassword("");
+    setFirstName("");
+    setLastName("");
+    setHotelName("");
   };
 
   return (
@@ -146,7 +153,7 @@ const AdminSignup = () => {
           </form>
 
           <p className="text-center text-sm mt-5 text-gray-600">
-            Already have an account?{' '}
+            Already have an account?{" "}
             <Link
               to="/admin-login"
               className="underline text-emerald-700 hover:text-emerald-900"
@@ -156,8 +163,8 @@ const AdminSignup = () => {
           </p>
 
           <p className="text-[10px] mt-6 text-center text-gray-500 leading-tight">
-            This site is protected by reCAPTCHA and the{' '}
-            <span className="underline">Google Privacy Policy</span> and{' '}
+            This site is protected by reCAPTCHA and the{" "}
+            <span className="underline">Google Privacy Policy</span> and{" "}
             <span className="underline">Terms of Service</span> apply.
           </p>
 

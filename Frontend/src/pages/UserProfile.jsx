@@ -5,7 +5,8 @@ import { useNavigate } from "react-router-dom";
 const UserProfile = () => {
   const [userDetails, setUserDetails] = useState({});
   const [orders, setOrders] = useState([]);
-  const [activeTab, setActiveTab] = useState("Pending");
+  const [activeTab, setActiveTab] = useState("Placed");
+
   const navigate = useNavigate();
 
   const token = localStorage.getItem("token");
@@ -13,11 +14,15 @@ const UserProfile = () => {
   useEffect(() => {
     const fetchUserDetails = async () => {
       try {
-        const response = await axios.post(
+        const response = await axios.get(
           `${import.meta.env.VITE_BASE_URL}/users/profile`,
-          {},
-          { headers: { Authorization: `Bearer ${token}` } }
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
         );
+
         if (response.status === 200) {
           setUserDetails(response.data);
           setOrders(response.data.orders || []);
@@ -42,141 +47,203 @@ const UserProfile = () => {
   };
 
   const statusGroups = {
-    Accepted: "✅ Accepted",
-    Pending: "⌛ Pending",
-    Rejected: "❌ Rejected",
-    Dispatched: " Packed",
-    Delivered: " Delivered",
+    Placed: "Placed",
+    Accepted: "Accepted",
+    Rejected: "Rejected",
+    Dispatched: "Dispatched",
+    Delivered: "Delivered",
   };
 
-  const filteredOrders = orders.filter((order) => order.status === activeTab);
+  const filteredOrders = orders.filter(
+    (order) => order.status === activeTab
+  );
 
   return (
-    <div className="min-h-screen bg-[#f9fafb] px-6 py-8">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-gray-100 px-6 py-8">
+
+      <div className="max-w-5xl mx-auto">
+
         <div className="flex justify-between items-center mb-6">
+
           <button
             onClick={handleGoBack}
-            className="text-sm bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded-md"
+            className="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded"
           >
             ← Go Back
           </button>
+
           <button
             onClick={handleLogout}
-            className="text-sm bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md"
+            className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
           >
             Logout
           </button>
+
         </div>
 
-        <h1 className="text-3xl font-bold mb-8 text-center text-gray-800">
+        <h1 className="text-3xl font-bold text-center mb-8">
           👤 User Profile
         </h1>
 
-        <div className="bg-white rounded-xl shadow-md p-6 mb-10">
-          <h2 className="text-xl font-semibold text-gray-700 mb-4">
+        <div className="bg-white rounded-xl shadow p-6 mb-8">
+
+          <h2 className="text-xl font-bold mb-4">
             Profile Details
           </h2>
-          <div className="text-gray-600 space-y-2">
-            <p>
-              <span className="font-medium">Name:</span>{" "}
-              {userDetails?.fullname?.firstname || "N/A"}{" "}
-              {userDetails?.fullname?.lastname || ""}
-            </p>
-            <p>
-              <span className="font-medium">Email:</span>{" "}
-              {userDetails?.email || "N/A"}
-            </p>
-          </div>
+
+          <p>
+            <span className="font-semibold">
+              Name :
+            </span>{" "}
+            {userDetails.first_name} {userDetails.last_name}
+          </p>
+
+          <p>
+            <span className="font-semibold">
+              Email :
+            </span>{" "}
+            {userDetails.email}
+          </p>
+
         </div>
 
-        <div className="mb-6 flex gap-4 flex-wrap justify-center">
+        <div className="flex justify-center gap-3 flex-wrap mb-8">
+
           {Object.keys(statusGroups).map((status) => (
+
             <button
               key={status}
-              className={`px-4 py-2 rounded-full text-sm font-semibold border ${
-                activeTab === status
-                  ? "bg-blue-600 text-white border-blue-600"
-                  : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
-              }`}
               onClick={() => setActiveTab(status)}
+              className={`px-4 py-2 rounded-full border transition ${
+                activeTab === status
+                  ? "bg-blue-600 text-white"
+                  : "bg-white"
+              }`}
             >
               {statusGroups[status]}
             </button>
+
           ))}
+
         </div>
 
-        <div className="bg-white rounded-xl shadow-md p-6">
-          <h2 className="text-xl font-semibold text-gray-700 mb-4 text-center">
+        <div className="bg-white rounded-xl shadow p-6">
+
+          <h2 className="text-2xl font-bold text-center mb-6">
             {statusGroups[activeTab]} Orders
           </h2>
 
           {filteredOrders.length === 0 ? (
-            <p className="text-gray-500 text-center">
-              No {activeTab.toLowerCase()} orders.
+
+            <p className="text-center text-gray-500">
+              No {activeTab} Orders Found
             </p>
+
           ) : (
-            filteredOrders.map((order, index) => (
+
+            filteredOrders.map((order) => (
+
               <div
-                key={index}
-                className="border border-gray-200 rounded-lg p-5 mb-6 bg-gray-50"
+                key={order.id}
+                className="border rounded-xl p-5 mb-6 bg-gray-50"
               >
-                <div className="mb-3">
-                  <p className="text-gray-700 break-all">
-                    <span className="font-medium">Order ID:</span>{" "}
-                    {order.orderId ? (
-                      <>
-                        {order.orderId.slice(0, -4)}
-                        <span className="font-bold">
-                          {order.orderId.slice(-4)}
-                        </span>
-                      </>
-                    ) : (
-                      "N/A"
-                    )}
+
+                <div className="space-y-2 mb-5">
+
+                  <p>
+                    <span className="font-semibold">
+                      Order ID :
+                    </span>{" "}
+                    #{order.id}
                   </p>
-                  <p className="text-gray-700">
-                    <span className="font-medium">Order Date:</span>{" "}
-                    {new Date(order.orderDate).toLocaleDateString()}
+
+                  <p>
+                    <span className="font-semibold">
+                      Order Date :
+                    </span>{" "}
+                    {new Date(
+                      order.created_at
+                    ).toLocaleString()}
                   </p>
-                  <p className="text-gray-700">
-                    <span className="font-medium">Status:</span> {order.status}
+
+                  <p>
+                    <span className="font-semibold">
+                      Status :
+                    </span>{" "}
+                    {order.status}
                   </p>
+
+                  <p>
+                    <span className="font-semibold">
+                      Delivery Address :
+                    </span>{" "}
+                    {order.selected_location}
+                  </p>
+
+                  <p>
+                    <span className="font-semibold">
+                      Total :
+                    </span>{" "}
+                    ₹{order.total_price.toFixed(2)}
+                  </p>
+
                 </div>
-                <div className="mt-4 space-y-4">
-                  <h3 className="font-semibold text-gray-600">Items:</h3>
-                  {order.items.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-start gap-4 bg-white p-3 rounded-md shadow-sm"
-                    >
-                      <img
-                        src={item.photo}
-                        alt={item.name}
-                        className="w-24 h-24 object-cover rounded-md"
-                      />
-                      <div className="text-gray-700 space-y-1">
-                        <p>
-                          <span className="font-medium">Item Name:</span>{" "}
-                          {item.name}
-                        </p>
-                        <p>
-                          <span className="font-medium">Price:</span> ₹
-                          {item.price.toFixed(2)}
-                        </p>
-                        <p>
-                          <span className="font-medium">Quantity:</span>{" "}
-                          {item.quantity}
-                        </p>
-                      </div>
+
+                <h3 className="font-bold mb-3">
+                  Ordered Items
+                </h3>
+
+                {(order.order_items || []).map((item) => (
+
+                  <div
+                    key={item.id}
+                    className="flex gap-4 items-center border rounded-lg p-3 mb-3 bg-white"
+                  >
+
+                    <img
+                      src={item.image}
+                      alt={item.name}
+                      className="w-24 h-24 rounded-lg object-cover"
+                    />
+
+                    <div>
+
+                      <h4 className="font-semibold text-lg">
+                        {item.name}
+                      </h4>
+
+                      <p>
+                        Price : ₹{item.price}
+                      </p>
+
+                      <p>
+                        Quantity : {item.quantity}
+                      </p>
+
+                      <p className="font-semibold text-green-600">
+                        Total : ₹
+                        {(
+                          item.price *
+                          item.quantity
+                        ).toFixed(2)}
+                      </p>
+
                     </div>
-                  ))}
-                </div>
+
+                  </div>
+
+                ))}
+
               </div>
+
             ))
+
           )}
+
         </div>
+
       </div>
+
     </div>
   );
 };

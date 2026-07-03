@@ -1,43 +1,57 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import AdminDataContext from '../context/AdminDataContext';
-import axios from 'axios';
+import React, { useEffect, useState, useContext } from "react";
+import { useNavigate } from "react-router-dom";
+import axios from "axios";
+import AdminDataContext from "../context/AdminDataContext";
 
 const AdminProtectWrapper = ({ children }) => {
-  
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem("token");
+
   const navigate = useNavigate();
-  const { admin, setAdmin } = React.useContext(AdminDataContext);
+
+  const { setAdmin } = useContext(AdminDataContext);
+
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (!token) {
-      navigate('/admin-login');
+      navigate("/admin-login", { replace: true });
+      return;
     }
-  }, [token, navigate]);
 
-  axios.get(`${import.meta.env.VITE_BASE_URL}/admins/profile`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  })
-    .then(response => {
-      if (response.status === 200) {
-        const data = response.data;
-        setAdmin(data.admin);
-        setIsLoading(false);
+    const fetchAdmin = async () => {
+      try {
+        const response = await axios.get(
+          `${import.meta.env.VITE_BASE_URL}/admins/profile`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (response.status === 200) {
+          const data = response.data;
+
+          setAdmin(data.admin || data);
+
+          setIsLoading(false);
+        }
+      } catch (error) {
+        console.error("Error fetching admin profile:", error);
+
+        localStorage.removeItem("token");
+
+        navigate("/admin-login", { replace: true });
       }
-    })
-    .catch(error => {
-      console.error('Error fetching admin profile:', error);
-      localStorage.removeItem('token');
-      navigate('/admin-login');
-    });
+    };
+
+    fetchAdmin();
+  }, [token, navigate, setAdmin]);
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="loader">Loading</div>
+        <h2 className="text-xl font-semibold">Loading...</h2>
       </div>
     );
   }

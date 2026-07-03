@@ -4,53 +4,69 @@ import axios from "axios";
 import UserDataContext from "../context/UserDataContext";
 
 const UserSignup = () => {
-  const [email, setEmail] = useState(""); 
-  const [password, setPassword] = useState(""); 
+  const navigate = useNavigate();
+  const { setUser } = useContext(UserDataContext);
+
   const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState(""); 
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const { setUser } = useContext(UserDataContext);
-  const navigate = useNavigate();
-
   const submitHandler = async (e) => {
     e.preventDefault();
+
     setError("");
     setSuccess("");
 
-    const newUser = {
-      fullname: {
-        firstname: firstName.trim(),
-        lastname: lastName.trim()
-      },
-      email: email.trim(),
-      password: password
-    };
-
     try {
-      const response = await axios.post(`${import.meta.env.VITE_BASE_URL}/users/register`, newUser);
-      
-      if (response.status === 201) {
-        const data = response.data;
-        setUser(data.user);
-        localStorage.setItem('token', data.token);
+      const response = await axios.post(
+        `${import.meta.env.VITE_BASE_URL}/users/register`,
+        {
+          first_name: firstName,
+          last_name: lastName,
+          email,
+          password,
+        }
+      );
+
+      if (response.status === 200 || response.status === 201) {
         setSuccess("Account created successfully!");
-        setTimeout(() => navigate("/user-home"));
+
+        if (response.data.user) {
+          setUser(response.data.user);
+        }
+
+        if (response.data.access_token) {
+          localStorage.setItem(
+            "token",
+            response.data.access_token
+          );
+        }
+
+        setTimeout(() => {
+          navigate("/login");
+        }, 1000);
       }
     } catch (err) {
-      const msg = err?.response?.data?.message || "Registration failed. Please try again.";
-      setError(msg);
+      setError(
+        err.response?.data?.detail ||
+          err.response?.data?.message ||
+          "Registration failed."
+      );
     }
 
-    setEmail("");
-    setPassword("");
     setFirstName("");
     setLastName("");
+    setEmail("");
+    setPassword("");
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-100 via-blue-600 to-indigo-800 px-4 py-6 flex flex-col">
+
       <img
         className="w-14 ml-2 mb-6"
         src="https://cdn-icons-png.flaticon.com/128/3063/3063822.png"
@@ -58,86 +74,108 @@ const UserSignup = () => {
       />
 
       <div className="flex-1 flex items-center justify-center">
-        <div className="bg-white border border-gray-200 shadow-md rounded-xl w-full max-w-md p-6 sm:p-8">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Create Account</h2>
+
+        <div className="bg-white shadow-lg rounded-xl w-full max-w-md p-8">
+
+          <h2 className="text-2xl font-bold text-center mb-6">
+            Create Account
+          </h2>
 
           <form onSubmit={submitHandler}>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-            <div className="flex gap-4 mb-4">
-              <input
-                required
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                className="rounded-lg bg-gray-100 px-4 py-2 border border-gray-300 w-1/2 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                type="text"
-                placeholder="First name"
-              />
-              <input
-                required
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                className="rounded-lg bg-gray-100 px-4 py-2 border border-gray-300 w-1/2 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                type="text"
-                placeholder="Last name"
-              />
-            </div>
 
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label className="block text-sm font-medium mb-1">
+              First Name
+            </label>
+
             <input
+              type="text"
+              required
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              className="w-full mb-4 px-4 py-2 border rounded-lg"
+            />
+
+            <label className="block text-sm font-medium mb-1">
+              Last Name
+            </label>
+
+            <input
+              type="text"
+              required
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              className="w-full mb-4 px-4 py-2 border rounded-lg"
+            />
+
+            <label className="block text-sm font-medium mb-1">
+              Email
+            </label>
+
+            <input
+              type="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="rounded-lg bg-gray-100 mb-4 px-4 py-2 border border-gray-300 w-full text-base focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              type="email"
-              placeholder="example@gmail.com"
+              className="w-full mb-4 px-4 py-2 border rounded-lg"
             />
 
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <label className="block text-sm font-medium mb-1">
+              Password
+            </label>
+
             <input
+              type="password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="rounded-lg bg-gray-100 mb-4 px-4 py-2 border border-gray-300 w-full text-base focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              type="password"
-              placeholder="Password"
+              className="w-full mb-4 px-4 py-2 border rounded-lg"
             />
 
             {error && (
-              <p className="text-red-600 text-sm mb-2">{error}</p>
+              <p className="text-red-600 mb-3">
+                {error}
+              </p>
             )}
+
             {success && (
-              <p className="text-green-600 text-sm mb-2">{success}</p>
+              <p className="text-green-600 mb-3">
+                {success}
+              </p>
             )}
 
             <button
               type="submit"
-              className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold mb-3 px-4 py-2 w-full text-base transition"
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-lg"
             >
               Sign Up
             </button>
+
           </form>
 
-          <p className="text-center text-sm text-gray-600">
-            Already have an account?{" "}
-            <Link to="/login" className="underline text-emerald-700 hover:text-emerald-900">
-              Login here
+          <p className="text-center mt-5">
+
+            Already have an account?
+
+            <Link
+              to="/login"
+              className="text-emerald-700 ml-1 underline"
+            >
+              Login
             </Link>
+
           </p>
 
-          <p className="text-[10px] mt-6 text-center text-gray-500 leading-tight">
-            This site is protected by reCAPTCHA and the{" "}
-            <span className="underline">Google Privacy Policy</span> and{" "}
-            <span className="underline">Terms of Service</span> apply.
-          </p>
-
-         <Link
+          <Link
             to="/admin-login"
-            className="mt-4 block bg-gray-800 hover:bg-gray-900 text-white text-center font-semibold px-4 py-2 w-full rounded-lg"
+            className="block text-center mt-5 bg-gray-800 text-white py-2 rounded-lg hover:bg-gray-900"
           >
             Sign in as Admin
           </Link>
+
         </div>
+
       </div>
+
     </div>
   );
 };
